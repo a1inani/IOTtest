@@ -1,0 +1,15 @@
+# Arduino IDE build artefacts
+.build/
+build/
+.cache/
+*.o
+*.a
+*.elf
+*.bin
+*.map
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
