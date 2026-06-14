@@ -46,8 +46,8 @@ section{margin-bottom:28px}
 .diag{font-size:.82rem;color:var(--muted);line-height:1.5;margin-top:8px}
 .diag code{font-size:.8rem;background:#e2e8f0;padding:1px 5px;border-radius:4px}
 a.btn,button.btn{display:inline-block;padding:8px 18px;border-radius:6px;text-decoration:none;font-size:.85rem;font-weight:600;color:#fff;border:0;cursor:pointer}
-a.btn.on,button.btn.on{background:var(--warn)}
-a.btn.off,button.btn.off{background:var(--ok)}
+a.btn.on,button.btn.on{background:var(--ok)}
+a.btn.off,button.btn.off{background:var(--warn)}
 a.btn.dl,button.btn.dl{background:var(--accent)}
 a.btn.clr,button.btn.clr{background:#64748b}
 .wrap{overflow-x:auto}
@@ -155,10 +155,10 @@ function refresh(){
           ', off='+lv(d.pump_off_level)+', current pin='+lv(d.pump_relay_level)+'.';
         document.getElementById('status').textContent='Last updated: uptime '+fmt(d.uptime_ms);
       } else {
-        document.getElementById('status').textContent='Awaiting first reading\u2026';
+        document.getElementById('status').textContent='Awaiting first reading…';
       }
     })
-    .catch(function(){document.getElementById('status').textContent='Connection error \u2013 retrying\u2026';});
+    .catch(function(){document.getElementById('status').textContent='Connection error – retrying…';});
 
   fetch('/api/history')
     .then(function(r){return r.json();})
