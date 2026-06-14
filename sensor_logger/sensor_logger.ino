@@ -1,7 +1,13 @@
 /*
- * sensor_logger.ino – Sensor Logger for XIAO ESP32-C6 + DHT11
+ * sensor_logger.ino – Sensor Logger for ESP32-C3 Super Mini
  *
- * Reads temperature, humidity, and a derived heat-index from a DHT11 sensor.
+ * Reads data from:
+ *   BME280         (I²C, SDA=GPIO 5, SCL=GPIO 6) – temperature, humidity, pressure, altitude
+ *   SEN0193        (GPIO 0, ADC)                  – analog water/liquid level
+ *   Soil pH sensor (GPIO 3, ADC)                  – estimated soil pH (requires calibration)
+ *   Grove rain     (GPIO 2, ADC)                  – water/rain presence
+ *   Pump relay     (GPIO 1, digital output)        – submersible pump control
+ *
  * Recent readings are stored in a RAM ring buffer; older readings are persisted
  * to LittleFS (internal flash) as a rolling CSV log.
  *
@@ -10,12 +16,15 @@
  *
  * Endpoints
  *   GET /               HTML dashboard (auto-refreshes every 5 s)
- *   GET /api/current    JSON – most recent reading
+ *   GET /api/current    JSON – most recent reading + pump state
  *   GET /api/history    JSON – last 50 RAM-buffer readings
+ *   GET /api/pump       JSON – current pump state
+ *   GET /api/pump/on    Turn pump ON (relay energised); redirects to /
+ *   GET /api/pump/off   Turn pump OFF (relay de-energised); redirects to /
  *   GET /api/log        CSV  – full persistent history (download)
  *   GET /api/log/clear  Erase persistent CSV log, then redirect to /
  *
- * See README.md for wiring, library dependencies, and build instructions.
+ * See README.md for wiring, library dependencies, calibration, and build instructions.
  * All tuneable constants are in config.h.
  */
 
@@ -26,7 +35,7 @@
 void setup() {
   Serial.begin(115200);
   delay(1500);  // allow USB serial to enumerate
-  Serial.println(F("\n=== Sensor Logger – XIAO ESP32-C6 ==="));
+  Serial.println(F("\n=== Sensor Logger – ESP32-C3 Super Mini ==="));
 
   SampleStore::begin();
   WebUI::begin();
@@ -48,6 +57,9 @@ void loop() {
     lastSample = now;
     SampleStore::takeSample();
   }
+
+  // Enforce pump safety timer (auto-off after PUMP_MAX_ON_MS)
+  SampleStore::updatePumpTimer();
 
   WebUI::handle();
 }

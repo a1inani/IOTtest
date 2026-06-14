@@ -1,31 +1,78 @@
 #pragma once
 
 // ─── Wi-Fi Access Point ────────────────────────────────────────────────────────
-// IMPORTANT: Change AP_PASSWORD before deploying. The default is intentionally
-// non-trivial but you should set a unique password for any real-world use.
+// IMPORTANT: Change AP_PASSWORD before deploying.
 #define AP_SSID      "SensorLogger"
 #define AP_PASSWORD  "SL-sensor-1!"  // must be ≥8 characters for WPA2; use "" for open
 
-// ─── DHT11 sensor ─────────────────────────────────────────────────────────────
-// XIAO ESP32-C6 pin mapping:  D2 = GPIO 4
-#define DHT_PIN   4
-#define DHT_TYPE  DHT11
+// ─── BME280 – I²C temperature / humidity / pressure ───────────────────────────
+// Default I²C pins for the ESP32-C3 Super Mini.
+// Change BME280_SDA_PIN / BME280_SCL_PIN to match your wiring if needed.
+#define BME280_SDA_PIN  5
+#define BME280_SCL_PIN  6
+// I²C address: 0x76 when SDO is tied to GND (most breakout boards); 0x77 when SDO → VCC.
+#define BME280_I2C_ADDR  0x76
+// Reference sea-level pressure used for the derived altitude calculation (hPa / mbar).
+// Adjust to your local QNH for accurate altitude readings.
+#define SEA_LEVEL_PRESSURE_HPA  1013.25f
+
+// ─── SEN0193 – Analog capacitive water / liquid level sensor ──────────────────
+// GPIO 0 = ADC1_CH0 on the ESP32-C3 Super Mini.
+#define WATER_LEVEL_PIN  0
+
+// ─── Analog soil pH sensor ────────────────────────────────────────────────────
+// The ESP32-C3 SoC supports ADC only on GPIO 0–4 (ADC1).
+// GPIO 7 and GPIO 8 are digital-only GPIO pins on this chip and CANNOT be used
+// as analog inputs.  Wire the pH sensor signal output to GPIO 3 (ADC1_CH3).
+// See README.md §"Pin Assignment Notes" for a full explanation.
+//
+// If your pH module has a second channel (e.g. temperature compensation),
+// connect it to GPIO 4 (ADC1_CH4) and read it with analogRead(4) as needed.
+#define SOIL_PH_PIN  3   // ADC1_CH3 – wire pH sensor signal here
+
+// pH calibration – linear model: pH = PH_SLOPE × voltage + PH_INTERCEPT
+// These are approximate defaults for a generic analog pH sensor at 25 °C.
+// *** Readings are ESTIMATES until you calibrate with pH 4.0 and pH 7.0 buffers. ***
+// See README.md §"pH Sensor Calibration" for the calibration procedure.
+#define PH_SLOPE      (-5.70f)   // pH units per volt
+#define PH_INTERCEPT  (21.34f)   // intercept
+
+// ─── Grove water / rain sensor ────────────────────────────────────────────────
+// GPIO 2 = ADC1_CH2. The sensor's analog output is read; rain is detected when
+// the raw ADC value exceeds RAIN_THRESHOLD.
+// NOTE: GPIO 2 is a strapping pin on the ESP32-C3 – see README §"GPIO Notes".
+#define RAIN_SENSOR_PIN  2
+#define RAIN_THRESHOLD   500   // ADC counts (0–4095); tune for your environment
+
+// ─── Submersible pump – relay control ─────────────────────────────────────────
+// GPIO 1 drives the relay coil that switches the pump.
+// Set PUMP_RELAY_ACTIVE_LEVEL to LOW  for active-LOW relay modules (most common).
+// Set PUMP_RELAY_ACTIVE_LEVEL to HIGH for active-HIGH relay modules.
+#define PUMP_RELAY_PIN           1
+#define PUMP_RELAY_ACTIVE_LEVEL  LOW
+
+// Safety: the firmware automatically de-energises the relay after this many
+// milliseconds even if no explicit OFF command is received.  This protects against
+// the pump running indefinitely due to a network issue or firmware hang.
+// 60 seconds is a conservative default suitable for small-volume pumping tasks
+// (e.g. brief watering runs).  Increase this value for larger tanks or slower pumps,
+// and always verify your pump's max continuous-run rating.
+// Set to 0 to disable (not recommended for unattended operation).
+#define PUMP_MAX_ON_MS  60000UL   // 60 seconds
 
 // ─── Sampling ─────────────────────────────────────────────────────────────────
-// DHT11 minimum reliable interval: 1 000 ms; 2 000 ms+ recommended.
-// 10 000 ms is the default – good balance between freshness and flash wear.
 #define SAMPLE_INTERVAL_MS  10000UL   // 10 seconds
 
 // ─── RAM ring buffer ──────────────────────────────────────────────────────────
-// Number of readings kept in memory (120 × 10 s ≈ 20 minutes of recent history)
+// 120 readings × 10 s ≈ 20 minutes of recent history instantly available.
 #define RAM_BUFFER_SIZE  120
 
 // ─── Flash persistence ────────────────────────────────────────────────────────
-// Write to LittleFS every N valid readings to reduce flash wear.
-// At 10 s/sample + PERSIST_EVERY_N = 6  →  one flash write per minute.
-#define PERSIST_EVERY_N   6
-#define LOG_FILE_PATH     "/sensor_log.csv"
-#define LOG_MAX_BYTES     (50 * 1024)   // rotate log after ~50 KB
+// Flush to LittleFS every N readings to limit flash wear.
+// At 10 s/sample + PERSIST_EVERY_N = 6  →  one write per minute.
+#define PERSIST_EVERY_N  6
+#define LOG_FILE_PATH    "/sensor_log.csv"
+#define LOG_MAX_BYTES    (50 * 1024)   // rotate log after ~50 KB
 
 // ─── HTTP server ──────────────────────────────────────────────────────────────
 #define HTTP_PORT  80

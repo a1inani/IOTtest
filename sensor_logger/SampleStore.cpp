@@ -1,38 +1,71 @@
 #include "SampleStore.h"
 #include "config.h"
 
-#include <DHT.h>
+#include <Wire.h>
+#include <Adafruit_BME280.h>
 #include <LittleFS.h>
 
 // ─── module-private state ─────────────────────────────────────────────────────
 
-static DHT dht(DHT_PIN, DHT_TYPE);
+static Adafruit_BME280 bme;
+static bool _bmeAvailable = false;
 
 static SensorReading _buf[RAM_BUFFER_SIZE];
-static int  _head  = 0;   // index of the NEXT write slot
-static int  _count = 0;   // number of valid entries currently stored
-
+static int  _head  = 0;
+static int  _count = 0;
 static int  _persistCounter = 0;
+
+static bool          _pumpOn     = false;
+static unsigned long _pumpOnTime = 0;
 
 // ─── forward declaration ──────────────────────────────────────────────────────
 
 static void persistReading(const SensorReading& r);
 
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+/** Relay OFF level is the logical inverse of the active (ON) level. */
+static inline int relayOffLevel() {
+  return (PUMP_RELAY_ACTIVE_LEVEL == LOW) ? HIGH : LOW;
+}
+
 // ─── public API ───────────────────────────────────────────────────────────────
 
 void SampleStore::begin() {
-  dht.begin();
-  Serial.printf("[SampleStore] DHT sensor (type id=%d) initialised on GPIO %d\n",
-               (int)DHT_TYPE, DHT_PIN);
+  // ── Pump relay: drive to safe OFF state immediately ────────────────────────
+  pinMode(PUMP_RELAY_PIN, OUTPUT);
+  digitalWrite(PUMP_RELAY_PIN, relayOffLevel());
+  Serial.printf("[SampleStore] Pump relay initialised on GPIO %d – OFF (safe state).\n",
+                PUMP_RELAY_PIN);
 
-  if (!LittleFS.begin(true)) {  // 'true' = format filesystem on first use
-    Serial.println("[SampleStore] LittleFS mount failed – readings will not persist across reboots.");
+  // ── BME280 via I²C ─────────────────────────────────────────────────────────
+  Wire.begin(BME280_SDA_PIN, BME280_SCL_PIN);
+  if (!bme.begin(BME280_I2C_ADDR, &Wire)) {
+    Serial.printf("[SampleStore] BME280 not found at address 0x%02X "
+                  "(SDA=GPIO%d, SCL=GPIO%d).\n"
+                  "              Check wiring. Try 0x77 if SDO is tied HIGH.\n",
+                  BME280_I2C_ADDR, BME280_SDA_PIN, BME280_SCL_PIN);
+    _bmeAvailable = false;
+  } else {
+    Serial.printf("[SampleStore] BME280 ready (SDA=GPIO%d, SCL=GPIO%d, addr=0x%02X).\n",
+                  BME280_SDA_PIN, BME280_SCL_PIN, BME280_I2C_ADDR);
+    _bmeAvailable = true;
+  }
+
+  // ── ADC – explicit 12-bit resolution (0–4095) ──────────────────────────────
+  analogReadResolution(12);
+  Serial.printf("[SampleStore] ADC 12-bit: water level GPIO%d, pH GPIO%d, rain GPIO%d.\n",
+                WATER_LEVEL_PIN, SOIL_PH_PIN, RAIN_SENSOR_PIN);
+
+  // ── LittleFS ───────────────────────────────────────────────────────────────
+  if (!LittleFS.begin(true)) {   // 'true' = format on first use
+    Serial.println("[SampleStore] LittleFS mount failed – readings will not persist.");
   } else {
     Serial.println("[SampleStore] LittleFS mounted.");
     if (LittleFS.exists(LOG_FILE_PATH)) {
       File f = LittleFS.open(LOG_FILE_PATH, "r");
       if (f) {
-        Serial.printf("[SampleStore] Existing log: %u bytes\n", (unsigned)f.size());
+        Serial.printf("[SampleStore] Existing log: %u bytes.\n", (unsigned)f.size());
         f.close();
       }
     }
@@ -40,26 +73,56 @@ void SampleStore::begin() {
 }
 
 void SampleStore::takeSample() {
-  SensorReading r;
-  r.uptime_ms     = millis();
-  r.humidity      = dht.readHumidity();
-  r.temperature_c = dht.readTemperature(false);  // Celsius
-  r.temperature_f = dht.readTemperature(true);   // Fahrenheit
+  SensorReading r{};
+  r.uptime_ms = millis();
 
-  if (isnan(r.humidity) || isnan(r.temperature_c)) {
-    Serial.println("[SampleStore] DHT11 read failed (NaN) – check wiring and pull-up resistor.");
-    r.valid       = false;
-    r.heat_index_c = NAN;
-    r.heat_index_f = NAN;
+  // ── BME280 ─────────────────────────────────────────────────────────────────
+  if (_bmeAvailable) {
+    r.temperature_c = bme.readTemperature();
+    r.humidity      = bme.readHumidity();
+    r.pressure_hpa  = bme.readPressure() / 100.0f;
+    r.altitude_m    = bme.readAltitude(SEA_LEVEL_PRESSURE_HPA);
+    r.temperature_f = r.temperature_c * 9.0f / 5.0f + 32.0f;
+
+    if (isnan(r.temperature_c) || isnan(r.humidity) || isnan(r.pressure_hpa)) {
+      Serial.println("[SampleStore] BME280 returned NaN – check sensor connection.");
+      r.bme_valid = false;
+    } else {
+      r.bme_valid = true;
+      Serial.printf("[SampleStore] BME: T=%.1f°C  H=%.1f%%  P=%.1fhPa  Alt=%.1fm\n",
+                    r.temperature_c, r.humidity, r.pressure_hpa, r.altitude_m);
+    }
   } else {
-    r.valid = true;
-    // heat_index is a DERIVED value computed from temperature + humidity
-    r.heat_index_c = dht.computeHeatIndex(r.temperature_c, r.humidity, false);
-    r.heat_index_f = dht.computeHeatIndex(r.temperature_f, r.humidity, true);
-
-    Serial.printf("[SampleStore] T=%.1f°C / %.1f°F  H=%.0f%%  HI=%.1f°C (derived)\n",
-                  r.temperature_c, r.temperature_f, r.humidity, r.heat_index_c);
+    r.bme_valid    = false;
+    r.temperature_c = NAN;
+    r.temperature_f = NAN;
+    r.humidity      = NAN;
+    r.pressure_hpa  = NAN;
+    r.altitude_m    = NAN;
   }
+
+  // ── SEN0193 water level ────────────────────────────────────────────────────
+  r.water_level_raw = analogRead(WATER_LEVEL_PIN);
+  r.water_level_pct = (int)((r.water_level_raw / 4095.0f) * 100.0f + 0.5f);
+  Serial.printf("[SampleStore] WaterLevel: raw=%d  pct=%d%%\n",
+                r.water_level_raw, r.water_level_pct);
+
+  // ── Soil pH (estimated) ────────────────────────────────────────────────────
+  r.ph_raw = analogRead(SOIL_PH_PIN);
+  float phVoltage = r.ph_raw * 3.3f / 4095.0f;
+  r.ph_value  = PH_SLOPE * phVoltage + PH_INTERCEPT;
+  // Clamp to valid pH range using Arduino's constrain() helper
+  r.ph_value  = constrain(r.ph_value, 0.0f, 14.0f);
+  Serial.printf("[SampleStore] SoilPH: raw=%d  %.3fV  pH≈%.2f (estimated, uncalibrated)\n",
+                r.ph_raw, phVoltage, r.ph_value);
+
+  // ── Grove water/rain sensor ────────────────────────────────────────────────
+  r.rain_raw      = analogRead(RAIN_SENSOR_PIN);
+  r.rain_detected = (r.rain_raw > RAIN_THRESHOLD);
+  Serial.printf("[SampleStore] Rain: raw=%d  detected=%s\n",
+                r.rain_raw, r.rain_detected ? "YES" : "no");
+
+  r.valid = true;
 
   // ── store in RAM ring buffer ────────────────────────────────────────────────
   _buf[_head] = r;
@@ -67,9 +130,36 @@ void SampleStore::takeSample() {
   if (_count < RAM_BUFFER_SIZE) _count++;
 
   // ── flush to LittleFS periodically ─────────────────────────────────────────
-  if (r.valid && (++_persistCounter >= PERSIST_EVERY_N)) {
+  if (++_persistCounter >= PERSIST_EVERY_N) {
     _persistCounter = 0;
     persistReading(r);
+  }
+}
+
+void SampleStore::setPump(bool on) {
+  _pumpOn = on;
+  if (on) {
+    _pumpOnTime = millis();
+    digitalWrite(PUMP_RELAY_PIN, PUMP_RELAY_ACTIVE_LEVEL);
+    Serial.printf("[SampleStore] Pump ON (auto-off in %lu s).\n",
+                  PUMP_MAX_ON_MS / 1000UL);
+  } else {
+    digitalWrite(PUMP_RELAY_PIN, relayOffLevel());
+    Serial.println("[SampleStore] Pump OFF.");
+  }
+}
+
+bool SampleStore::getPumpState() {
+  return _pumpOn;
+}
+
+void SampleStore::updatePumpTimer() {
+  // Unsigned subtraction wraps correctly on millis() rollover (~49 days),
+  // so this comparison remains valid throughout continuous operation.
+  if (PUMP_MAX_ON_MS > 0 && _pumpOn &&
+      (millis() - _pumpOnTime >= PUMP_MAX_ON_MS)) {
+    Serial.println("[SampleStore] Pump auto-off: safety timer expired.");
+    setPump(false);
   }
 }
 
@@ -87,7 +177,7 @@ String SampleStore::historyJson(int maxEntries) {
   int start = (_head - n + RAM_BUFFER_SIZE * 2) % RAM_BUFFER_SIZE;
 
   String json;
-  json.reserve(128 + n * 110);  // pre-allocate to reduce heap fragmentation
+  json.reserve(512 + n * 220);
   json = F("{\"readings\":[");
 
   bool first = true;
@@ -97,17 +187,35 @@ String SampleStore::historyJson(int maxEntries) {
     if (!first) json += ',';
     first = false;
 
-    char entry[128];
+    // Format BME280 floats: output "null" for NaN to produce valid JSON.
+    char tC[10], tF[10], hum[10], pHpa[10], alt[10];
+    if (r.bme_valid) {
+      snprintf(tC,   sizeof(tC),   "%.1f", r.temperature_c);
+      snprintf(tF,   sizeof(tF),   "%.1f", r.temperature_f);
+      snprintf(hum,  sizeof(hum),  "%.1f", r.humidity);
+      snprintf(pHpa, sizeof(pHpa), "%.1f", r.pressure_hpa);
+      snprintf(alt,  sizeof(alt),  "%.1f", r.altitude_m);
+    } else {
+      strcpy(tC, "null"); strcpy(tF, "null"); strcpy(hum, "null");
+      strcpy(pHpa, "null"); strcpy(alt, "null");
+    }
+
+    char entry[256];
     snprintf(entry, sizeof(entry),
-             "{\"uptime_ms\":%lu,\"temperature_c\":%.1f,\"temperature_f\":%.1f,"
-             "\"humidity\":%.1f,\"heat_index_c\":%.1f,\"heat_index_f\":%.1f}",
+             "{\"uptime_ms\":%lu,\"bme_valid\":%s,"
+             "\"temperature_c\":%s,\"temperature_f\":%s,"
+             "\"humidity\":%s,\"pressure_hpa\":%s,\"altitude_m\":%s,"
+             "\"water_level_raw\":%d,\"water_level_pct\":%d,"
+             "\"ph_raw\":%d,\"ph_value\":%.2f,"
+             "\"rain_raw\":%d,\"rain_detected\":%s}",
              r.uptime_ms,
-             r.temperature_c, r.temperature_f,
-             r.humidity,
-             r.heat_index_c, r.heat_index_f);
+             r.bme_valid ? "true" : "false",
+             tC, tF, hum, pHpa, alt,
+             r.water_level_raw, r.water_level_pct,
+             r.ph_raw, r.ph_value,
+             r.rain_raw, r.rain_detected ? "true" : "false");
     json += entry;
   }
-
   json += F("]}");
   return json;
 }
@@ -152,16 +260,33 @@ static void persistReading(const SensorReading& r) {
   }
 
   if (needHeader) {
+    // Column names: mark derived and estimated values explicitly
     f.println(F("uptime_ms,temperature_c,temperature_f,humidity,"
-                "heat_index_c(derived),heat_index_f(derived)"));
+                "pressure_hpa,altitude_m(derived),"
+                "water_level_raw,water_level_pct,"
+                "ph_raw,ph_value(estimated),rain_raw,rain_detected"));
   }
 
-  char line[96];
-  snprintf(line, sizeof(line), "%lu,%.1f,%.1f,%.1f,%.1f,%.1f",
+  // Format NaN as empty field so the CSV remains parseable
+  char tC[8], tF[8], hum[8], pHpa[8], alt[8];
+  if (r.bme_valid) {
+    snprintf(tC,   sizeof(tC),   "%.1f", r.temperature_c);
+    snprintf(tF,   sizeof(tF),   "%.1f", r.temperature_f);
+    snprintf(hum,  sizeof(hum),  "%.1f", r.humidity);
+    snprintf(pHpa, sizeof(pHpa), "%.1f", r.pressure_hpa);
+    snprintf(alt,  sizeof(alt),  "%.1f", r.altitude_m);
+  } else {
+    tC[0] = tF[0] = hum[0] = pHpa[0] = alt[0] = '\0';
+  }
+
+  char line[192];
+  snprintf(line, sizeof(line),
+           "%lu,%s,%s,%s,%s,%s,%d,%d,%d,%.2f,%d,%d",
            r.uptime_ms,
-           r.temperature_c, r.temperature_f,
-           r.humidity,
-           r.heat_index_c, r.heat_index_f);
+           tC, tF, hum, pHpa, alt,
+           r.water_level_raw, r.water_level_pct,
+           r.ph_raw, r.ph_value,
+           r.rain_raw, (int)r.rain_detected);
   f.println(line);
   f.close();
 }
