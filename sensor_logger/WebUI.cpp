@@ -51,6 +51,11 @@ a.btn.off,button.btn.off{background:var(--warn)}
 a.btn.dl,button.btn.dl{background:var(--accent)}
 a.btn.clr,button.btn.clr{background:#64748b}
 .wrap{overflow-x:auto}
+.graphs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.chart-card{background:var(--card);border-radius:12px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.chart-title{font-size:.82rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.chart{width:100%;height:110px;display:block}
+.chart-meta{font-size:.75rem;color:var(--muted);margin-top:6px}
 table{width:100%;border-collapse:collapse;background:var(--card);border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 th{background:var(--accent);color:#fff;padding:9px 12px;text-align:left;font-size:.78rem;font-weight:600;white-space:nowrap}
 td{padding:7px 12px;font-size:.82rem;border-bottom:1px solid #e2e8f0;white-space:nowrap}
@@ -87,6 +92,19 @@ tr:nth-child(even) td{background:#f8fafc}
 </section>
 
 <section>
+  <h2>Metric Trends</h2>
+  <p class="note">Recent history visualized from the same sensor readings used by the table below.</p>
+  <div class="graphs">
+    <div class="chart-card"><div class="chart-title">Temperature (&#176;C)</div><svg class="chart" id="graph_temp" viewBox="0 0 300 110" preserveAspectRatio="none"></svg><div class="chart-meta" id="graph_temp_meta">&#8212;</div></div>
+    <div class="chart-card"><div class="chart-title">Humidity (% RH)</div><svg class="chart" id="graph_hum" viewBox="0 0 300 110" preserveAspectRatio="none"></svg><div class="chart-meta" id="graph_hum_meta">&#8212;</div></div>
+    <div class="chart-card"><div class="chart-title">Pressure (hPa)</div><svg class="chart" id="graph_pres" viewBox="0 0 300 110" preserveAspectRatio="none"></svg><div class="chart-meta" id="graph_pres_meta">&#8212;</div></div>
+    <div class="chart-card"><div class="chart-title">Water Level (%)</div><svg class="chart" id="graph_wl" viewBox="0 0 300 110" preserveAspectRatio="none"></svg><div class="chart-meta" id="graph_wl_meta">&#8212;</div></div>
+    <div class="chart-card"><div class="chart-title">Soil pH</div><svg class="chart" id="graph_ph" viewBox="0 0 300 110" preserveAspectRatio="none"></svg><div class="chart-meta" id="graph_ph_meta">&#8212;</div></div>
+    <div class="chart-card"><div class="chart-title">Rain / Wet</div><svg class="chart" id="graph_rain" viewBox="0 0 300 110" preserveAspectRatio="none"></svg><div class="chart-meta" id="graph_rain_meta">0 = Dry, 1 = Wet</div></div>
+  </div>
+</section>
+
+<section>
   <h2>Recent Readings</h2>
   <p class="note">&#9733; Altitude is derived from barometric pressure (requires accurate sea-level reference). Soil pH is an <strong>estimated</strong> value that requires calibration – see README.</p>
   <div class="wrap">
@@ -120,6 +138,62 @@ tr:nth-child(even) td{background:#f8fafc}
 function fmt(ms){var s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor(m/60);return h+'h '+(m%60)+'m '+(s%60)+'s';}
 function fv(v,d){return(v===null||v===undefined)?'—':Number(v).toFixed(d!==undefined?d:1);}
 function lv(v){return Number(v)===0?'LOW':'HIGH';}
+function nv(v){var n=Number(v);return isFinite(n)?n:null;}
+function fvf(v,d){return Number(v).toFixed(d!==undefined?d:1);}
+
+function renderLineGraph(svgId,metaId,values,opt){
+  var svg=document.getElementById(svgId),meta=document.getElementById(metaId);
+  if(!svg||!meta)return;
+  if(!values.length){
+    svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" fill="#94a3b8" font-size="12">No data</text>';
+    meta.textContent='No recent samples';
+    return;
+  }
+  var min=values[0],max=values[0];
+  for(var i=1;i<values.length;i++){if(values[i]<min)min=values[i];if(values[i]>max)max=values[i];}
+  if(opt.discrete){min=0;max=1;}
+  if(min===max){min-=1;max+=1;}
+  var w=300,h=110,p=8,den=(values.length-1)||1,pts='';
+  for(var j=0;j<values.length;j++){
+    var x=p+(j/den)*(w-2*p);
+    var y=h-p-((values[j]-min)/(max-min))*(h-2*p);
+    pts+=(j?' ':'')+x.toFixed(2)+','+y.toFixed(2);
+  }
+  var guideTop=opt.discrete?(h-p-((1-min)/(max-min))*(h-2*p)).toFixed(2):p;
+  var guideBottom=opt.discrete?(h-p-((0-min)/(max-min))*(h-2*p)).toFixed(2):(h-p);
+  svg.innerHTML=
+    '<line x1="'+p+'" y1="'+guideTop+'" x2="'+(w-p)+'" y2="'+guideTop+'" stroke="#cbd5e1" stroke-width="1"/>'+
+    '<line x1="'+p+'" y1="'+guideBottom+'" x2="'+(w-p)+'" y2="'+guideBottom+'" stroke="#cbd5e1" stroke-width="1"/>'+
+    '<polyline fill="none" stroke="'+(opt.color||'#2563eb')+'" stroke-width="2.5" points="'+pts+'"/>';
+  if(opt.discrete){
+    meta.textContent='Dry↔Wet transitions over '+values.length+' samples';
+  }else{
+    meta.textContent='min '+fvf(min,opt.decimals)+' '+opt.unit+' • max '+fvf(max,opt.decimals)+' '+opt.unit;
+  }
+}
+
+function renderGraphs(rows){
+  var temp=[],hum=[],pres=[],wl=[],ph=[],rain=[];
+  for(var i=0;i<rows.length;i++){
+    var r=rows[i];
+    if(r.bme_valid){
+      var t=nv(r.temperature_c),h=nv(r.humidity),p=nv(r.pressure_hpa);
+      if(t!==null)temp.push(t);
+      if(h!==null)hum.push(h);
+      if(p!==null)pres.push(p);
+    }
+    var w=nv(r.water_level_pct),phv=nv(r.ph_value);
+    if(w!==null)wl.push(w);
+    if(phv!==null)ph.push(phv);
+    rain.push(r.rain_detected?1:0);
+  }
+  renderLineGraph('graph_temp','graph_temp_meta',temp,{unit:'°C',decimals:1,color:'#0ea5e9'});
+  renderLineGraph('graph_hum','graph_hum_meta',hum,{unit:'%RH',decimals:1,color:'#14b8a6'});
+  renderLineGraph('graph_pres','graph_pres_meta',pres,{unit:'hPa',decimals:1,color:'#d97706'});
+  renderLineGraph('graph_wl','graph_wl_meta',wl,{unit:'%',decimals:0,color:'#2563eb'});
+  renderLineGraph('graph_ph','graph_ph_meta',ph,{unit:'pH',decimals:2,color:'#7c3aed'});
+  renderLineGraph('graph_rain','graph_rain_meta',rain,{discrete:true,color:'#16a34a'});
+}
 
 function controlPump(turnOn){
   var msg=turnOn?'Turn pump ON? It will auto-off after the safety timer.':'Turn pump OFF?';
@@ -164,6 +238,7 @@ function refresh(){
     .then(function(r){return r.json();})
     .then(function(data){
       var rows=data.readings||[];
+      renderGraphs(rows);
       var tbody=document.getElementById('tbody');
       if(!rows.length){
         tbody.innerHTML='<tr><td colspan="13" style="text-align:center;color:#94a3b8">No readings yet</td></tr>';
