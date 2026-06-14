@@ -50,7 +50,7 @@
 // likely wrong for your relay board: switch LOW <-> HIGH, reflash, and retest.
 // Always test relay behaviour without the pump attached first.
 #define PUMP_RELAY_PIN           1
-#define PUMP_RELAY_ACTIVE_LEVEL  LOW
+#define PUMP_RELAY_ACTIVE_LEVEL  HIGH
 
 // Safety: the firmware automatically de-energises the relay after this many
 // milliseconds even if no explicit OFF command is received.  This protects against
