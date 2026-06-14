@@ -66,6 +66,7 @@ tr:nth-child(even) td{background:#f8fafc}
 <body>
 <header>
   <h1>&#127777; Sensor Logger</h1>
+  <h2>By Chanda Mulenga>/h2>
   <div id="status">Connecting&#8230;</div>
 </header>
 
