@@ -115,7 +115,9 @@ void SampleStore::takeSample() {
 
   // ── SEN0193 water level ────────────────────────────────────────────────────
   r.water_level_raw = analogRead(WATER_LEVEL_PIN);
-  r.water_level_pct = (int)((r.water_level_raw / 4095.0f) * 100.0f + 0.5f);
+  // SEN0193 is a capacitive sensor: higher ADC value = drier (lower capacitance).
+  // Invert so that 0 % = dry (high ADC) and 100 % = wet (low ADC).
+  r.water_level_pct = (int)(((4095.0f - r.water_level_raw) / 4095.0f) * 100.0f + 0.5f);
   Serial.printf("[SampleStore] WaterLevel: raw=%d  pct=%d%%\n",
                 r.water_level_raw, r.water_level_pct);
 
