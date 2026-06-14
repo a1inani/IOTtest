@@ -3,7 +3,7 @@
 // ─── Wi-Fi Access Point ───────────────────────────────────────────────────────
 // IMPORTANT: Change AP_PASSWORD before deploying.
 #define AP_SSID      "SensorLogger"
-#define AP_PASSWORD  "SL-sensor-1!"  // must be ≥8 characters for WPA2; use "" for open
+#define AP_PASSWORD  ""  // must be ≥8 characters for WPA2; use "" for open
 
 // ─── BME280 – I²C temperature / humidity / pressure ───────────────────────────
 // Default I²C pins for the ESP32-C3 Super Mini.
