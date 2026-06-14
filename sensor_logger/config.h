@@ -25,8 +25,8 @@
 // Primary pH analog signal is read from GPIO 7.
 // If your module exposes a second analog channel (e.g. compensation/reference),
 // GPIO 8 is reserved for that secondary channel.
-#define SOIL_PH_PIN       7
-#define SOIL_PH_AUX_PIN   8
+#define SOIL_PH_PIN       3
+#define SOIL_PH_AUX_PIN   4
 
 // pH calibration – linear model: pH = PH_SLOPE × voltage + PH_INTERCEPT
 // These are approximate defaults for a generic analog pH sensor at 25 °C.
