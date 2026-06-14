@@ -24,7 +24,7 @@ static unsigned long _pumpOnTime = 0;
 
 static void persistReading(const SensorReading& r);
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
+// ─── helpers ────────���────────────────────────────────────────────────────────
 
 /** Relay OFF level is the logical inverse of the active (ON) level. */
 static inline int relayOffLevel() {
@@ -69,7 +69,7 @@ void SampleStore::begin() {
   Serial.printf("[SampleStore] ADC 12-bit: water level GPIO%d, pH GPIO%d, rain GPIO%d.\n",
                 WATER_LEVEL_PIN, SOIL_PH_PIN, RAIN_SENSOR_PIN);
 
-  // ── LittleFS ───────────────────────────────────────────────────────────────
+  // ── LittleFS ────────────────────────────────────────────────────────────────
   if (!LittleFS.begin(true)) {   // 'true' = format on first use
     Serial.println("[SampleStore] LittleFS mount failed – readings will not persist.");
   } else {
@@ -132,7 +132,7 @@ void SampleStore::takeSample() {
 
   // ── Grove water/rain sensor ────────────────────────────────────────────────
   r.rain_raw      = analogRead(RAIN_SENSOR_PIN);
-  r.rain_detected = (r.rain_raw > RAIN_THRESHOLD);
+  r.rain_detected = (r.rain_raw < RAIN_THRESHOLD);
   Serial.printf("[SampleStore] Rain: raw=%d  detected=%s\n",
                 r.rain_raw, r.rain_detected ? "YES" : "no");
 
