@@ -8,16 +8,13 @@
 // ─── BME280 – I²C temperature / humidity / pressure ───────────────────────────
 // Default I²C pins for the ESP32-C3 Super Mini.
 // Change BME280_SDA_PIN / BME280_SCL_PIN to match your wiring if needed.
-#define BME280_SDA_PIN  5
-#define BME280_SCL_PIN  6
+#define BME280_SDA_PIN  10
+#define BME280_SCL_PIN  9
 // I²C address: 0x76 when SDO is tied to GND (most breakout boards); 0x77 when SDO → VCC.
 #define BME280_I2C_ADDR  0x76
 // Reference sea-level pressure used for the derived altitude calculation (hPa / mbar).
 // Adjust to your local QNH for accurate altitude readings.
 #define SEA_LEVEL_PRESSURE_HPA  1013.25f
-// Fixed temperature offset to compensate for local board/self-heating.
-// Positive values are subtracted from the raw BME280 temperature.
-#define BME280_TEMP_OFFSET_C  2.9f
 
 // ─── SEN0193 – Analog capacitive water / liquid level sensor ──────────────────
 // GPIO 0 = ADC1_CH0 on the ESP32-C3 Super Mini.
@@ -55,7 +52,7 @@
 // likely wrong for your relay board: switch LOW <-> HIGH, reflash, and retest.
 // Always test relay behaviour without the pump attached first.
 #define PUMP_RELAY_PIN           1
-#define PUMP_RELAY_ACTIVE_LEVEL  LOW
+#define PUMP_RELAY_ACTIVE_LEVEL  HIGH
 
 // Safety: the firmware automatically de-energises the relay after this many
 // milliseconds even if no explicit OFF command is received.  This protects against
