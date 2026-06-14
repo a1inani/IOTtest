@@ -119,7 +119,7 @@ tr:nth-child(even) td{background:#f8fafc}
 <script>
 function fmt(ms){var s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor(m/60);return h+'h '+(m%60)+'m '+(s%60)+'s';}
 function fv(v,d){return(v===null||v===undefined)?'—':Number(v).toFixed(d!==undefined?d:1);}
-function lv(v){return Number(v)===1?'HIGH':'LOW';}
+function lv(v){return Number(v)===0?'LOW':'HIGH';}
 
 function controlPump(turnOn){
   var msg=turnOn?'Turn pump ON? It will auto-off after the safety timer.':'Turn pump OFF?';
@@ -128,7 +128,7 @@ function controlPump(turnOn){
   fetch(path,{method:'POST'})
     .then(function(r){return r.json();})
     .then(function(){refresh();})
-    .catch(function(){document.getElementById('status').textContent='Pump control request failed';});
+    .catch(function(){document.getElementById('status').textContent='Pump '+(turnOn?'ON':'OFF')+' request failed';});
 }
 
 function refresh(){
@@ -150,9 +150,9 @@ function refresh(){
         var pon=d.pump_on;
         document.getElementById('pump_state').textContent = pon ? 'ON' : 'OFF';
         document.getElementById('pump_card').className='card'+(pon?' pump-on':'');
-        document.getElementById('pump_diag').innerHTML=
-          'GPIO <code>'+d.pump_pin+'</code> configured active=<code>'+lv(d.pump_active_level)+
-          '</code>, off=<code>'+lv(d.pump_off_level)+'</code>, current pin=<code>'+lv(d.pump_relay_level)+'</code>.';
+        document.getElementById('pump_diag').textContent =
+          'GPIO '+d.pump_pin+' configured active='+lv(d.pump_active_level)+
+          ', off='+lv(d.pump_off_level)+', current pin='+lv(d.pump_relay_level)+'.';
         document.getElementById('status').textContent='Last updated: uptime '+fmt(d.uptime_ms);
       } else {
         document.getElementById('status').textContent='Awaiting first reading\u2026';

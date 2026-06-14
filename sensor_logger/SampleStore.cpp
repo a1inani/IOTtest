@@ -15,6 +15,7 @@ static int  _head  = 0;
 static int  _count = 0;
 static int  _persistCounter = 0;
 
+// Keep startup default explicitly in sync with relayOffLevel() logic.
 static int           _pumpRelayLevel =
     (PUMP_RELAY_ACTIVE_LEVEL == LOW) ? HIGH : LOW;
 static unsigned long _pumpOnTime = 0;
@@ -149,12 +150,18 @@ void SampleStore::takeSample() {
 
 void SampleStore::setPump(bool on) {
   int targetLevel = on ? PUMP_RELAY_ACTIVE_LEVEL : relayOffLevel();
-  bool wasOn = (_pumpRelayLevel == PUMP_RELAY_ACTIVE_LEVEL);
   if (targetLevel == _pumpRelayLevel) {
-    Serial.printf("[SampleStore] Pump command unchanged: requested %s, pin already %s (GPIO%d).\n",
-                  on ? "ON" : "OFF", levelName(_pumpRelayLevel), PUMP_RELAY_PIN);
+    if (on) {
+      _pumpOnTime = millis();
+      Serial.printf("[SampleStore] Pump ON repeated: GPIO%d already %s, safety timer reset to %lus.\n",
+                    PUMP_RELAY_PIN, levelName(_pumpRelayLevel), PUMP_MAX_ON_MS / 1000UL);
+    } else {
+      Serial.printf("[SampleStore] Pump command unchanged: requested OFF, pin already %s (GPIO%d).\n",
+                    levelName(_pumpRelayLevel), PUMP_RELAY_PIN);
+    }
     return;
   }
+  bool wasOn = (_pumpRelayLevel == PUMP_RELAY_ACTIVE_LEVEL);
 
   digitalWrite(PUMP_RELAY_PIN, targetLevel);
   _pumpRelayLevel = targetLevel;
