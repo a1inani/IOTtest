@@ -1,6 +1,6 @@
 #pragma once
 
-// ─── Wi-Fi Access Point ────────────────────────────────────────────────────────
+// ─── Wi-Fi Access Point ───────────────────────────────────────────────────────
 // IMPORTANT: Change AP_PASSWORD before deploying.
 #define AP_SSID      "SensorLogger"
 #define AP_PASSWORD  "SL-sensor-1!"  // must be ≥8 characters for WPA2; use "" for open
@@ -8,8 +8,8 @@
 // ─── BME280 – I²C temperature / humidity / pressure ───────────────────────────
 // Default I²C pins for the ESP32-C3 Super Mini.
 // Change BME280_SDA_PIN / BME280_SCL_PIN to match your wiring if needed.
-#define BME280_SDA_PIN  5
-#define BME280_SCL_PIN  6
+#define BME280_SDA_PIN  10
+#define BME280_SCL_PIN  9
 // I²C address: 0x76 when SDO is tied to GND (most breakout boards); 0x77 when SDO → VCC.
 #define BME280_I2C_ADDR  0x76
 // Reference sea-level pressure used for the derived altitude calculation (hPa / mbar).
