@@ -58,9 +58,10 @@ Stores history locally on internal flash and serves a captive-portal web dashboa
 | **0** | SEN0193 signal (ADC1\_CH0) | Analog water/liquid level |
 | **1** | Pump relay control (digital out) | Active-LOW by default (`PUMP_RELAY_ACTIVE_LEVEL`) |
 | **2** | Grove rain sensor (ADC1\_CH2) | Also a strapping pin – see §GPIO Notes |
-| **3** | Soil pH sensor signal (ADC1\_CH3) | See §Pin Assignment Notes |
-| **5** | BME280 SDA | Configurable – change `BME280_SDA_PIN` in `config.h` |
-| **6** | BME280 SCL | Configurable – change `BME280_SCL_PIN` in `config.h` |
+| **7** | Soil pH sensor primary signal | Primary pH input (`SOIL_PH_PIN`) |
+| **8** | Soil pH auxiliary signal | Reserved secondary pH input (`SOIL_PH_AUX_PIN`) |
+| **9** | BME280 SCL | Configurable – change `BME280_SCL_PIN` in `config.h` |
+| **10** | BME280 SDA | Configurable – change `BME280_SDA_PIN` in `config.h` |
 
 ### Wiring
 
@@ -69,8 +70,8 @@ BME280          →   ESP32-C3 Super Mini
 ─────────────────────────────────────────────
 VCC              3.3 V
 GND              GND
-SDA              GPIO 5   ← BME280_SDA_PIN (configurable)
-SCL              GPIO 6   ← BME280_SCL_PIN (configurable)
+SDA              GPIO 10  ← BME280_SDA_PIN (configurable)
+SCL              GPIO 9   ← BME280_SCL_PIN (configurable)
 
 SEN0193 (water level sensor)
 ─────────────────────────────────────────────
@@ -82,7 +83,8 @@ Soil pH sensor
 ─────────────────────────────────────────────
 VCC              3.3 V (or 5 V if module requires)
 GND              GND
-SIGNAL           GPIO 3   ← SOIL_PH_PIN  (see Pin Assignment Notes)
+SIGNAL           GPIO 7   ← SOIL_PH_PIN
+AUX / REF        GPIO 8   ← SOIL_PH_AUX_PIN (optional / reserved)
 
 Grove water/rain sensor
 ─────────────────────────────────────────────
@@ -103,16 +105,18 @@ NO (or NC)       Pump supply wire (use NO for normally-open; pump runs when rela
 
 ### Pin Assignment Notes
 
-The **ESP32-C3 SoC supports ADC only on GPIO 0–4** (ADC1).  
-GPIO 7 and GPIO 8 are digital-only GPIO pins on this chip and **cannot be used as analog inputs**.  
-For this reason the soil pH sensor signal is connected to **GPIO 3** (ADC1\_CH3), which is the next available ADC pin after GPIO 0 (SEN0193) and GPIO 2 (rain sensor).
+The project is currently configured to use:
+- **GPIO 10 / GPIO 9** for the BME280 I²C bus (`SDA` / `SCL`)
+- **GPIO 7** as the primary soil pH sensor pin
+- **GPIO 8** as an auxiliary/secondary soil pH pin reservation
 
-If your pH module includes a second analog output for temperature compensation, connect it to **GPIO 4** (ADC1\_CH4) and read it with `analogRead(4)` as needed.
+If your pH module exposes only a single analog output, connect that output to **GPIO 7**.
+If it exposes a second usable channel, connect it to **GPIO 8**.
 
 ### GPIO Notes
 
-- **GPIO 2** is a strapping pin on the ESP32-C3.  It must be **low or floating during boot**.  If your rain sensor drives it high at power-on, the ESP32 may fail to boot.  Most Grove rain sensor modules do not drive the output high at startup, but verify your specific module.  If you encounter boot failures, add a **10 kΩ pull-down resistor** between GPIO 2 and GND to hold the pin low during startup, or temporarily disconnect the sensor signal wire during the first power-on test.
-- **GPIO 9** is the BOOT/FLASH button strapping pin.  It is not used in this project.
+- **GPIO 2** is a strapping pin on the ESP32-C3.  It must be **low or floating during boot**.  If your rain sensor drives it high at power-on, the ESP32 may fail to boot.  Most Grove rain sensor boards are passive enough to be fine, but if you see boot issues add a 10 kΩ pull-down resistor.
+- **GPIO 9** is commonly associated with boot/flash functions on some ESP32-C3 boards. This project now uses it for BME280 SCL per the current wiring; if you encounter boot or bus issues, verify your exact board variant and wiring.
 
 ---
 
@@ -201,12 +205,13 @@ All tuneable constants live in `sensor_logger/config.h`:
 |----------|---------|-------------|
 | `AP_SSID` | `"SensorLogger"` | Wi-Fi network name |
 | `AP_PASSWORD` | `"SL-sensor-1!"` | Wi-Fi password (≥ 8 chars; `""` = open) |
-| `BME280_SDA_PIN` | `5` | I²C SDA GPIO for BME280 |
-| `BME280_SCL_PIN` | `6` | I²C SCL GPIO for BME280 |
+| `BME280_SDA_PIN` | `10` | I²C SDA GPIO for BME280 |
+| `BME280_SCL_PIN` | `9` | I²C SCL GPIO for BME280 |
 | `BME280_I2C_ADDR` | `0x76` | BME280 I²C address (0x77 if SDO→VCC) |
 | `SEA_LEVEL_PRESSURE_HPA` | `1013.25` | Reference pressure for altitude derivation |
 | `WATER_LEVEL_PIN` | `0` | GPIO for SEN0193 signal (ADC1\_CH0) |
-| `SOIL_PH_PIN` | `3` | GPIO for pH sensor signal (ADC1\_CH3) |
+| `SOIL_PH_PIN` | `7` | Primary GPIO for pH sensor signal |
+| `SOIL_PH_AUX_PIN` | `8` | Auxiliary / secondary GPIO for pH sensor |
 | `PH_SLOPE` | `-5.70` | pH calibration slope (pH/V) |
 | `PH_INTERCEPT` | `21.34` | pH calibration intercept |
 | `RAIN_SENSOR_PIN` | `2` | GPIO for Grove rain sensor (ADC1\_CH2) |
@@ -276,11 +281,11 @@ The default `PH_SLOPE` and `PH_INTERCEPT` values are approximations suitable for
 
 ### SEN0193 Water Level
 
-The SEN0193 sensor outputs an analog voltage proportional to immersion depth.  The firmware reads the raw ADC value (0–4095) and maps it linearly to 0–100 %.  This is an approximation; actual behaviour depends on the liquid type and sensor placement.  Calibrate `water_level_pct` against a known reference if precise measurements are needed.
+The SEN0193 sensor outputs an analog voltage proportional to immersion depth.  The firmware reads the raw ADC value (0–4095) and maps it linearly to 0–100 %.  This is an approximation; actual calibration depends on tank geometry and sensor placement.
 
 ### Altitude Derivation
 
-The altitude value is **derived** from the BME280 barometric pressure measurement using the standard hypsometric formula.  Accuracy depends on the `SEA_LEVEL_PRESSURE_HPA` reference in `config.h`.  Update this value with the current local QNH (available from weather services) for accurate results.  Expect errors of several tens of metres with the default value.
+The altitude value is **derived** from the BME280 barometric pressure measurement using the standard hypsometric formula.  Accuracy depends on the `SEA_LEVEL_PRESSURE_HPA` reference in `config.h`.
 
 ### Pump Safety
 
@@ -308,7 +313,7 @@ If pump behaviour does not match the dashboard, use this checklist:
 
 ### Flash Wear
 
-Readings are flushed to internal flash every `PERSIST_EVERY_N` samples (default: one write per minute).  The log is rotated when it exceeds `LOG_MAX_BYTES`.  This keeps flash write cycles low and well within the ESP32's endurance specification.
+Readings are flushed to internal flash every `PERSIST_EVERY_N` samples (default: one write per minute).  The log is rotated when it exceeds `LOG_MAX_BYTES`.  This keeps flash write cycles low and is appropriate for low-rate environmental logging.
 
 ### Security Note
 
@@ -317,4 +322,4 @@ The `AP_PASSWORD` in `config.h` is a default intended only for initial testing.
 
 ### Captive Portal Behaviour
 
-Captive portal behaviour varies between operating systems.  The device runs a DNS server that answers every query with `192.168.4.1` and handles the well-known OS-specific detection URLs.  If the automatic popup does not appear, open a browser and navigate to `http://192.168.4.1/`.
+Captive portal behaviour varies between operating systems.  The device runs a DNS server that answers every query with `192.168.4.1` and handles the well-known OS-specific detection URLs.  If the popup does not appear automatically, manually browse to `http://192.168.4.1/`.
