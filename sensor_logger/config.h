@@ -8,25 +8,30 @@
 // ─── BME280 – I²C temperature / humidity / pressure ───────────────────────────
 // Default I²C pins for the ESP32-C3 Super Mini.
 // Change BME280_SDA_PIN / BME280_SCL_PIN to match your wiring if needed.
-#define BME280_SDA_PIN  10
-#define BME280_SCL_PIN  9
+#define BME280_SDA_PIN  5
+#define BME280_SCL_PIN  6
 // I²C address: 0x76 when SDO is tied to GND (most breakout boards); 0x77 when SDO → VCC.
 #define BME280_I2C_ADDR  0x76
 // Reference sea-level pressure used for the derived altitude calculation (hPa / mbar).
 // Adjust to your local QNH for accurate altitude readings.
 #define SEA_LEVEL_PRESSURE_HPA  1013.25f
+// Fixed temperature offset to compensate for local board/self-heating.
+// Positive values are subtracted from the raw BME280 temperature.
+#define BME280_TEMP_OFFSET_C  2.9f
 
 // ─── SEN0193 – Analog capacitive water / liquid level sensor ──────────────────
 // GPIO 0 = ADC1_CH0 on the ESP32-C3 Super Mini.
 #define WATER_LEVEL_PIN  0
 
 // ─── Analog soil pH sensor ────────────────────────────────────────────────────
-// Per user request, use GPIO 7 / GPIO 8 for the soil pH sensor interface.
-// Primary pH analog signal is read from GPIO 7.
-// If your module exposes a second analog channel (e.g. compensation/reference),
-// GPIO 8 is reserved for that secondary channel.
-#define SOIL_PH_PIN       7
-#define SOIL_PH_AUX_PIN   8
+// The ESP32-C3 SoC supports ADC only on GPIO 0–4 (ADC1).
+// GPIO 7 and GPIO 8 are digital-only GPIO pins on this chip and CANNOT be used
+// as analog inputs.  Wire the pH sensor signal output to GPIO 3 (ADC1_CH3).
+// See README.md §"Pin Assignment Notes" for a full explanation.
+//
+// If your pH module has a second channel (e.g. temperature compensation),
+// connect it to GPIO 4 (ADC1_CH4) and read it with analogRead(4) as needed.
+#define SOIL_PH_PIN  3   // ADC1_CH3 – wire pH sensor signal here
 
 // pH calibration – linear model: pH = PH_SLOPE × voltage + PH_INTERCEPT
 // These are approximate defaults for a generic analog pH sensor at 25 °C.
@@ -50,7 +55,7 @@
 // likely wrong for your relay board: switch LOW <-> HIGH, reflash, and retest.
 // Always test relay behaviour without the pump attached first.
 #define PUMP_RELAY_PIN           1
-#define PUMP_RELAY_ACTIVE_LEVEL  HIGH
+#define PUMP_RELAY_ACTIVE_LEVEL  LOW
 
 // Safety: the firmware automatically de-energises the relay after this many
 // milliseconds even if no explicit OFF command is received.  This protects against
