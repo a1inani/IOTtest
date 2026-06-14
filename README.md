@@ -28,8 +28,10 @@ Stores history locally on internal flash and serves a captive-portal web dashboa
 | `/api/current` | GET | JSON – most recent reading + pump state |
 | `/api/history` | GET | JSON – last 50 RAM-buffer readings |
 | `/api/pump` | GET | JSON – current pump relay state |
-| `/api/pump/on` | GET | Energise pump relay; redirects to `/` |
-| `/api/pump/off` | GET | De-energise pump relay; redirects to `/` |
+| `/api/pump/on` | POST | Energise pump relay; returns pump-state JSON |
+| `/api/pump/off` | POST | De-energise pump relay; returns pump-state JSON |
+| `/api/pump/on` | GET | Backward-compatible route; redirects to `/` |
+| `/api/pump/off` | GET | Backward-compatible route; redirects to `/` |
 | `/api/log` | GET | Full persistent CSV log (direct download) |
 | `/api/log/clear` | GET | Erase the persistent CSV log, redirect to `/` |
 
@@ -286,6 +288,23 @@ The altitude value is **derived** from the BME280 barometric pressure measuremen
 - The `PUMP_MAX_ON_MS` safety timer (default 60 s) automatically de-energises the relay even if the device loses connectivity or the firmware hangs after a turn-on command.
 - **Do not leave the pump running unattended for extended periods** without appropriate flow sensors or overflow protection in your physical installation.
 - Use an appropriately rated relay for your pump's voltage and current.
+
+### Pump Troubleshooting
+
+If pump behaviour does not match the dashboard, use this checklist:
+
+1. **Pump turns on at boot while dashboard says OFF**
+   - This is usually a relay polarity mismatch.
+   - In `sensor_logger/config.h`, switch `PUMP_RELAY_ACTIVE_LEVEL` (`LOW` ↔ `HIGH`), reflash, and retest.
+2. **ON/OFF controls seem inverted**
+   - Your relay board is likely the opposite polarity of the current configuration.
+   - Flip `PUMP_RELAY_ACTIVE_LEVEL`, reflash, and verify again.
+3. **Dashboard button appears ineffective**
+   - The dashboard uses `fetch()` calls to `POST /api/pump/on` and `POST /api/pump/off`.
+   - Check Serial Monitor logs for pump command lines that print active/off levels and the exact GPIO level written.
+   - Check the dashboard pump diagnostics line (`active`, `off`, and `current pin`) for polarity mismatch clues.
+
+> **Safety first:** test relay switching **without the pump attached** before live pump testing.
 
 ### Flash Wear
 

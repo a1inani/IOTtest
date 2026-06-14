@@ -43,11 +43,13 @@ h2{font-size:1.1rem;color:var(--accent);margin-bottom:8px}
 .note{font-size:.78rem;color:var(--muted);margin-bottom:10px}
 section{margin-bottom:28px}
 .pump-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px}
-a.btn{display:inline-block;padding:8px 18px;border-radius:6px;text-decoration:none;font-size:.85rem;font-weight:600;color:#fff}
-a.btn.on{background:var(--warn)}
-a.btn.off{background:var(--ok)}
-a.btn.dl{background:var(--accent)}
-a.btn.clr{background:#64748b}
+.diag{font-size:.82rem;color:var(--muted);line-height:1.5;margin-top:8px}
+.diag code{font-size:.8rem;background:#e2e8f0;padding:1px 5px;border-radius:4px}
+a.btn,button.btn{display:inline-block;padding:8px 18px;border-radius:6px;text-decoration:none;font-size:.85rem;font-weight:600;color:#fff;border:0;cursor:pointer}
+a.btn.on,button.btn.on{background:var(--warn)}
+a.btn.off,button.btn.off{background:var(--ok)}
+a.btn.dl,button.btn.dl{background:var(--accent)}
+a.btn.clr,button.btn.clr{background:#64748b}
 .wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;background:var(--card);border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 th{background:var(--accent);color:#fff;padding:9px 12px;text-align:left;font-size:.78rem;font-weight:600;white-space:nowrap}
@@ -78,9 +80,10 @@ tr:nth-child(even) td{background:#f8fafc}
   <h2>Pump Control</h2>
   <p class="note">The pump will auto-off after the configured safety time even if no OFF command is sent.</p>
   <div class="pump-controls">
-    <a class="btn on" id="btn_pump_on" href="/api/pump/on" aria-label="Turn pump on" onclick="return confirm('Turn pump ON? It will auto-off after the safety timer.')">&#9889; Turn ON</a>
-    <a class="btn off" id="btn_pump_off" href="/api/pump/off" aria-label="Turn pump off" onclick="return confirm('Turn pump OFF?')">&#9632; Turn OFF</a>
+    <button class="btn on" id="btn_pump_on" type="button" aria-label="Turn pump on">&#9889; Turn ON</button>
+    <button class="btn off" id="btn_pump_off" type="button" aria-label="Turn pump off">&#9632; Turn OFF</button>
   </div>
+  <div class="diag" id="pump_diag">Pump diagnostics: waiting for data…</div>
 </section>
 
 <section>
@@ -116,6 +119,17 @@ tr:nth-child(even) td{background:#f8fafc}
 <script>
 function fmt(ms){var s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor(m/60);return h+'h '+(m%60)+'m '+(s%60)+'s';}
 function fv(v,d){return(v===null||v===undefined)?'—':Number(v).toFixed(d!==undefined?d:1);}
+function lv(v){return Number(v)===1?'HIGH':'LOW';}
+
+function controlPump(turnOn){
+  var msg=turnOn?'Turn pump ON? It will auto-off after the safety timer.':'Turn pump OFF?';
+  if(!confirm(msg)) return;
+  var path=turnOn?'/api/pump/on':'/api/pump/off';
+  fetch(path,{method:'POST'})
+    .then(function(r){return r.json();})
+    .then(function(){refresh();})
+    .catch(function(){document.getElementById('status').textContent='Pump control request failed';});
+}
 
 function refresh(){
   fetch('/api/current')
@@ -136,6 +150,9 @@ function refresh(){
         var pon=d.pump_on;
         document.getElementById('pump_state').textContent = pon ? 'ON' : 'OFF';
         document.getElementById('pump_card').className='card'+(pon?' pump-on':'');
+        document.getElementById('pump_diag').innerHTML=
+          'GPIO <code>'+d.pump_pin+'</code> configured active=<code>'+lv(d.pump_active_level)+
+          '</code>, off=<code>'+lv(d.pump_off_level)+'</code>, current pin=<code>'+lv(d.pump_relay_level)+'</code>.';
         document.getElementById('status').textContent='Last updated: uptime '+fmt(d.uptime_ms);
       } else {
         document.getElementById('status').textContent='Awaiting first reading\u2026';
@@ -175,6 +192,8 @@ function refresh(){
       tbody.innerHTML=html;
     });
 }
+document.getElementById('btn_pump_on').addEventListener('click',function(){controlPump(true);});
+document.getElementById('btn_pump_off').addEventListener('click',function(){controlPump(false);});
 refresh();
 setInterval(refresh,5000);
 </script>
@@ -187,6 +206,8 @@ setInterval(refresh,5000);
 static void handleRoot() {
   server.send(200, F("text/html"), DASHBOARD_HTML);
 }
+
+static void handlePumpState();
 
 static void handleCurrentJson() {
   SensorReading r = SampleStore::getLatest();
@@ -216,18 +237,30 @@ static void handleCurrentJson() {
              "\"water_level_raw\":%d,\"water_level_pct\":%d,"
              "\"ph_raw\":%d,\"ph_value\":%.2f,"
              "\"rain_raw\":%d,\"rain_detected\":%s,"
-             "\"pump_on\":%s}",
+             "\"pump_on\":%s,"
+             "\"pump_pin\":%d,\"pump_relay_level\":%d,"
+             "\"pump_active_level\":%d,\"pump_off_level\":%d}",
              r.uptime_ms,
              r.bme_valid ? "true" : "false",
              tC, tF, hum, pHpa, alt,
              r.water_level_raw, r.water_level_pct,
              r.ph_raw, r.ph_value,
              r.rain_raw, r.rain_detected ? "true" : "false",
-             SampleStore::getPumpState() ? "true" : "false");
+             SampleStore::getPumpState() ? "true" : "false",
+             PUMP_RELAY_PIN,
+             SampleStore::getPumpRelayLevel(),
+             SampleStore::getPumpRelayActiveLevel(),
+             SampleStore::getPumpRelayOffLevel());
   } else {
     snprintf(buf, sizeof(buf),
-             "{\"valid\":false,\"pump_on\":%s}",
-             SampleStore::getPumpState() ? "true" : "false");
+             "{\"valid\":false,\"pump_on\":%s,"
+             "\"pump_pin\":%d,\"pump_relay_level\":%d,"
+             "\"pump_active_level\":%d,\"pump_off_level\":%d}",
+             SampleStore::getPumpState() ? "true" : "false",
+             PUMP_RELAY_PIN,
+             SampleStore::getPumpRelayLevel(),
+             SampleStore::getPumpRelayActiveLevel(),
+             SampleStore::getPumpRelayOffLevel());
   }
 
   server.sendHeader(F("Access-Control-Allow-Origin"), F("*"));
@@ -261,22 +294,41 @@ static void handleLogClear() {
   server.send(302);
 }
 
+static void sendPumpCommandResponse(bool on) {
+  SampleStore::setPump(on);
+  handlePumpState();
+}
+
 static void handlePumpOn() {
+  if (server.method() == HTTP_POST) {
+    sendPumpCommandResponse(true);
+    return;
+  }
   SampleStore::setPump(true);
   server.sendHeader(F("Location"), F("/"));
   server.send(302);
 }
 
 static void handlePumpOff() {
+  if (server.method() == HTTP_POST) {
+    sendPumpCommandResponse(false);
+    return;
+  }
   SampleStore::setPump(false);
   server.sendHeader(F("Location"), F("/"));
   server.send(302);
 }
 
 static void handlePumpState() {
-  char buf[48];
-  snprintf(buf, sizeof(buf), "{\"pump_on\":%s}",
-           SampleStore::getPumpState() ? "true" : "false");
+  char buf[160];
+  snprintf(buf, sizeof(buf),
+           "{\"pump_on\":%s,\"pump_pin\":%d,"
+           "\"pump_relay_level\":%d,\"pump_active_level\":%d,\"pump_off_level\":%d}",
+           SampleStore::getPumpState() ? "true" : "false",
+           PUMP_RELAY_PIN,
+           SampleStore::getPumpRelayLevel(),
+           SampleStore::getPumpRelayActiveLevel(),
+           SampleStore::getPumpRelayOffLevel());
   server.sendHeader(F("Access-Control-Allow-Origin"), F("*"));
   server.send(200, F("application/json"), buf);
 }
@@ -317,7 +369,9 @@ void WebUI::begin() {
   server.on("/api/log/clear",             handleLogClear);
   server.on("/api/pump",                  handlePumpState);
   server.on("/api/pump/on",               handlePumpOn);
+  server.on("/api/pump/on", HTTP_POST,    handlePumpOn);
   server.on("/api/pump/off",              handlePumpOff);
+  server.on("/api/pump/off", HTTP_POST,   handlePumpOff);
 
   // Known captive-portal detection endpoints (Android, iOS, Windows, Firefox)
   server.on("/generate_204",              handleCaptive);  // Android

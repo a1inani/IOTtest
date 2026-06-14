@@ -48,6 +48,9 @@
 // GPIO 1 drives the relay coil that switches the pump.
 // Set PUMP_RELAY_ACTIVE_LEVEL to LOW  for active-LOW relay modules (most common).
 // Set PUMP_RELAY_ACTIVE_LEVEL to HIGH for active-HIGH relay modules.
+// If the pump turns ON at boot while the dashboard says OFF, this polarity is
+// likely wrong for your relay board: switch LOW <-> HIGH, reflash, and retest.
+// Always test relay behaviour without the pump attached first.
 #define PUMP_RELAY_PIN           1
 #define PUMP_RELAY_ACTIVE_LEVEL  LOW
 

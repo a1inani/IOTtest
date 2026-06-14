@@ -78,6 +78,15 @@ namespace SampleStore {
   /** Return the current commanded pump state (true = relay energised). */
   bool getPumpState();
 
+  /** Return the GPIO level most recently written to the pump relay pin. */
+  int getPumpRelayLevel();
+
+  /** Return the configured relay active (energised) GPIO level. */
+  int getPumpRelayActiveLevel();
+
+  /** Return the configured relay OFF (de-energised) GPIO level. */
+  int getPumpRelayOffLevel();
+
   /**
    * Must be called from loop().
    * Enforces the pump auto-off safety timer defined by PUMP_MAX_ON_MS.
