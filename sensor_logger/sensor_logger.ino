@@ -19,8 +19,10 @@
  *   GET /api/current    JSON – most recent reading + pump state
  *   GET /api/history    JSON – last 50 RAM-buffer readings
  *   GET /api/pump       JSON – current pump state
- *   GET /api/pump/on    Turn pump ON (relay energised); redirects to /
- *   GET /api/pump/off   Turn pump OFF (relay de-energised); redirects to /
+ *   POST /api/pump/on   Turn pump ON (relay energised); returns pump JSON
+ *   POST /api/pump/off  Turn pump OFF (relay de-energised); returns pump JSON
+ *   GET /api/pump/on    Backward-compatible control route; redirects to /
+ *   GET /api/pump/off   Backward-compatible control route; redirects to /
  *   GET /api/log        CSV  – full persistent history (download)
  *   GET /api/log/clear  Erase persistent CSV log, then redirect to /
  *

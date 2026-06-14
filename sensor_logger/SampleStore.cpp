@@ -15,7 +15,9 @@ static int  _head  = 0;
 static int  _count = 0;
 static int  _persistCounter = 0;
 
-static bool          _pumpOn     = false;
+// Keep startup default explicitly in sync with relayOffLevel() logic.
+static int           _pumpRelayLevel =
+    (PUMP_RELAY_ACTIVE_LEVEL == LOW) ? HIGH : LOW;
 static unsigned long _pumpOnTime = 0;
 
 // ─── forward declaration ──────────────────────────────────────────────────────
@@ -29,14 +31,24 @@ static inline int relayOffLevel() {
   return (PUMP_RELAY_ACTIVE_LEVEL == LOW) ? HIGH : LOW;
 }
 
+static inline const char* levelName(int level) {
+  return (level == HIGH) ? "HIGH" : "LOW";
+}
+
 // ─── public API ───────────────────────────────────────────────────────────────
 
 void SampleStore::begin() {
   // ── Pump relay: drive to safe OFF state immediately ────────────────────────
+  // Set the output latch first, then enable output mode to reduce startup glitches.
+  digitalWrite(PUMP_RELAY_PIN, relayOffLevel());
   pinMode(PUMP_RELAY_PIN, OUTPUT);
   digitalWrite(PUMP_RELAY_PIN, relayOffLevel());
-  Serial.printf("[SampleStore] Pump relay initialised on GPIO %d – OFF (safe state).\n",
-                PUMP_RELAY_PIN);
+  _pumpRelayLevel = relayOffLevel();
+  Serial.printf("[SampleStore] Pump relay init GPIO%d: active=%s, off=%s, pin=%s (safe OFF).\n",
+                PUMP_RELAY_PIN,
+                levelName(PUMP_RELAY_ACTIVE_LEVEL),
+                levelName(relayOffLevel()),
+                levelName(_pumpRelayLevel));
 
   // ── BME280 via I²C ─────────────────────────────────────────────────────────
   Wire.begin(BME280_SDA_PIN, BME280_SCL_PIN);
@@ -137,26 +149,56 @@ void SampleStore::takeSample() {
 }
 
 void SampleStore::setPump(bool on) {
-  _pumpOn = on;
-  if (on) {
-    _pumpOnTime = millis();
-    digitalWrite(PUMP_RELAY_PIN, PUMP_RELAY_ACTIVE_LEVEL);
-    Serial.printf("[SampleStore] Pump ON (auto-off in %lu s).\n",
-                  PUMP_MAX_ON_MS / 1000UL);
-  } else {
-    digitalWrite(PUMP_RELAY_PIN, relayOffLevel());
-    Serial.println("[SampleStore] Pump OFF.");
+  int targetLevel = on ? PUMP_RELAY_ACTIVE_LEVEL : relayOffLevel();
+  if (targetLevel == _pumpRelayLevel) {
+    if (on) {
+      _pumpOnTime = millis();
+      Serial.printf("[SampleStore] Pump ON repeated: GPIO%d already %s, safety timer reset to %lus.\n",
+                    PUMP_RELAY_PIN, levelName(_pumpRelayLevel), PUMP_MAX_ON_MS / 1000UL);
+    } else {
+      Serial.printf("[SampleStore] Pump command unchanged: requested OFF, pin already %s (GPIO%d).\n",
+                    levelName(_pumpRelayLevel), PUMP_RELAY_PIN);
+    }
+    return;
   }
+  bool wasOn = (_pumpRelayLevel == PUMP_RELAY_ACTIVE_LEVEL);
+
+  digitalWrite(PUMP_RELAY_PIN, targetLevel);
+  _pumpRelayLevel = targetLevel;
+
+  if (on && !wasOn) {
+    _pumpOnTime = millis();
+  }
+
+  Serial.printf("[SampleStore] Pump %s: wrote GPIO%d=%s (active=%s, off=%s, timer=%lus).\n",
+                on ? "ON" : "OFF",
+                PUMP_RELAY_PIN,
+                levelName(_pumpRelayLevel),
+                levelName(PUMP_RELAY_ACTIVE_LEVEL),
+                levelName(relayOffLevel()),
+                PUMP_MAX_ON_MS / 1000UL);
 }
 
 bool SampleStore::getPumpState() {
-  return _pumpOn;
+  return (_pumpRelayLevel == PUMP_RELAY_ACTIVE_LEVEL);
+}
+
+int SampleStore::getPumpRelayLevel() {
+  return _pumpRelayLevel;
+}
+
+int SampleStore::getPumpRelayActiveLevel() {
+  return PUMP_RELAY_ACTIVE_LEVEL;
+}
+
+int SampleStore::getPumpRelayOffLevel() {
+  return relayOffLevel();
 }
 
 void SampleStore::updatePumpTimer() {
   // Unsigned subtraction wraps correctly on millis() rollover (~49 days),
   // so this comparison remains valid throughout continuous operation.
-  if (PUMP_MAX_ON_MS > 0 && _pumpOn &&
+  if (PUMP_MAX_ON_MS > 0 && getPumpState() &&
       (millis() - _pumpOnTime >= PUMP_MAX_ON_MS)) {
     Serial.println("[SampleStore] Pump auto-off: safety timer expired.");
     setPump(false);
