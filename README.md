@@ -109,7 +109,7 @@ If your pH module includes a second analog output for temperature compensation, 
 
 ### GPIO Notes
 
-- **GPIO 2** is a strapping pin on the ESP32-C3.  It must be **low or floating during boot**.  If your rain sensor drives it high at power-on, the ESP32 may fail to boot.  Most Grove rain sensor modules do not drive the output high at startup, but verify your specific module.
+- **GPIO 2** is a strapping pin on the ESP32-C3.  It must be **low or floating during boot**.  If your rain sensor drives it high at power-on, the ESP32 may fail to boot.  Most Grove rain sensor modules do not drive the output high at startup, but verify your specific module.  If you encounter boot failures, add a **10 kΩ pull-down resistor** between GPIO 2 and GND to hold the pin low during startup, or temporarily disconnect the sensor signal wire during the first power-on test.
 - **GPIO 9** is the BOOT/FLASH button strapping pin.  It is not used in this project.
 
 ---

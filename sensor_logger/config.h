@@ -54,6 +54,9 @@
 // Safety: the firmware automatically de-energises the relay after this many
 // milliseconds even if no explicit OFF command is received.  This protects against
 // the pump running indefinitely due to a network issue or firmware hang.
+// 60 seconds is a conservative default suitable for small-volume pumping tasks
+// (e.g. brief watering runs).  Increase this value for larger tanks or slower pumps,
+// and always verify your pump's max continuous-run rating.
 // Set to 0 to disable (not recommended for unattended operation).
 #define PUMP_MAX_ON_MS  60000UL   // 60 seconds
 

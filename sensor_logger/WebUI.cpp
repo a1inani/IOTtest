@@ -78,8 +78,8 @@ tr:nth-child(even) td{background:#f8fafc}
   <h2>Pump Control</h2>
   <p class="note">The pump will auto-off after the configured safety time even if no OFF command is sent.</p>
   <div class="pump-controls">
-    <a class="btn on" id="btn_pump_on" href="/api/pump/on" onclick="return confirm('Turn pump ON? It will auto-off after the safety timer.')">&#9889; Turn ON</a>
-    <a class="btn off" id="btn_pump_off" href="/api/pump/off" onclick="return confirm('Turn pump OFF?')">&#9632; Turn OFF</a>
+    <a class="btn on" id="btn_pump_on" href="/api/pump/on" aria-label="Turn pump on" onclick="return confirm('Turn pump ON? It will auto-off after the safety timer.')">&#9889; Turn ON</a>
+    <a class="btn off" id="btn_pump_off" href="/api/pump/off" aria-label="Turn pump off" onclick="return confirm('Turn pump OFF?')">&#9632; Turn OFF</a>
   </div>
 </section>
 
@@ -200,8 +200,11 @@ static void handleCurrentJson() {
     snprintf(pHpa, sizeof(pHpa), "%.1f", r.pressure_hpa);
     snprintf(alt,  sizeof(alt),  "%.1f", r.altitude_m);
   } else {
-    strcpy(tC, "null"); strcpy(tF, "null"); strcpy(hum, "null");
-    strcpy(pHpa, "null"); strcpy(alt, "null");
+    strcpy(tC, "null");
+    strcpy(tF, "null");
+    strcpy(hum, "null");
+    strcpy(pHpa, "null");
+    strcpy(alt, "null");
   }
 
   char buf[512];

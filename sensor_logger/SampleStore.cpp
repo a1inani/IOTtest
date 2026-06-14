@@ -110,10 +110,9 @@ void SampleStore::takeSample() {
   // ── Soil pH (estimated) ────────────────────────────────────────────────────
   r.ph_raw = analogRead(SOIL_PH_PIN);
   float phVoltage = r.ph_raw * 3.3f / 4095.0f;
-  r.ph_value = PH_SLOPE * phVoltage + PH_INTERCEPT;
-  // Clamp to the valid pH scale
-  if (r.ph_value < 0.0f)  r.ph_value = 0.0f;
-  if (r.ph_value > 14.0f) r.ph_value = 14.0f;
+  r.ph_value  = PH_SLOPE * phVoltage + PH_INTERCEPT;
+  // Clamp to valid pH range using Arduino's constrain() helper
+  r.ph_value  = constrain(r.ph_value, 0.0f, 14.0f);
   Serial.printf("[SampleStore] SoilPH: raw=%d  %.3fV  pH≈%.2f (estimated, uncalibrated)\n",
                 r.ph_raw, phVoltage, r.ph_value);
 
@@ -155,6 +154,8 @@ bool SampleStore::getPumpState() {
 }
 
 void SampleStore::updatePumpTimer() {
+  // Unsigned subtraction wraps correctly on millis() rollover (~49 days),
+  // so this comparison remains valid throughout continuous operation.
   if (PUMP_MAX_ON_MS > 0 && _pumpOn &&
       (millis() - _pumpOnTime >= PUMP_MAX_ON_MS)) {
     Serial.println("[SampleStore] Pump auto-off: safety timer expired.");
