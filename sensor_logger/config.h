@@ -40,7 +40,7 @@
 // the raw ADC value exceeds RAIN_THRESHOLD.
 // NOTE: GPIO 2 is a strapping pin on the ESP32-C3 – see README §"GPIO Notes".
 #define RAIN_SENSOR_PIN  2
-#define RAIN_THRESHOLD   500   // ADC counts (0–4095); tune for your environment
+#define RAIN_THRESHOLD   1500   // ADC counts (0–4095); tune for your environment
 
 // ─── Submersible pump – relay control ─────────────────────────────────────────
 // GPIO 1 drives the relay coil that switches the pump.
