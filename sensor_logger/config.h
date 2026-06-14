@@ -21,14 +21,12 @@
 #define WATER_LEVEL_PIN  0
 
 // ─── Analog soil pH sensor ────────────────────────────────────────────────────
-// The ESP32-C3 SoC supports ADC only on GPIO 0–4 (ADC1).
-// GPIO 7 and GPIO 8 are digital-only GPIO pins on this chip and CANNOT be used
-// as analog inputs.  Wire the pH sensor signal output to GPIO 3 (ADC1_CH3).
-// See README.md §"Pin Assignment Notes" for a full explanation.
-//
-// If your pH module has a second channel (e.g. temperature compensation),
-// connect it to GPIO 4 (ADC1_CH4) and read it with analogRead(4) as needed.
-#define SOIL_PH_PIN  3   // ADC1_CH3 – wire pH sensor signal here
+// Per user request, use GPIO 7 / GPIO 8 for the soil pH sensor interface.
+// Primary pH analog signal is read from GPIO 7.
+// If your module exposes a second analog channel (e.g. compensation/reference),
+// GPIO 8 is reserved for that secondary channel.
+#define SOIL_PH_PIN       7
+#define SOIL_PH_AUX_PIN   8
 
 // pH calibration – linear model: pH = PH_SLOPE × voltage + PH_INTERCEPT
 // These are approximate defaults for a generic analog pH sensor at 25 °C.
